@@ -1,0 +1,81 @@
+#!/bin/sh
+
+set -e
+
+DRY_RUN=0
+EXCLUDES=""
+TOTAL_SIZE=0
+TOTAL_COUNT=0
+
+# parse args
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dry)
+            DRY_RUN=1
+            ;;
+        --exclude)
+            shift
+            while [ "$1" ] && [ "${1#--}" = "$1" ]; do
+                EXCLUDES="$EXCLUDES
+$(realpath "$1")"
+                shift
+            done
+            continue
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+is_excluded() {
+    for excl in $EXCLUDES; do
+        [ "$1" = "$excl" ] && return 0
+    done
+    return 1
+}
+
+human_size() {
+    awk -v bytes="$1" '
+    function h(x) {
+        split("B K M G T P", u)
+        for (i = 1; x >= 1024 && i < length(u); i++) x /= 1024
+        return sprintf("%.1f%s", x, u[i])
+    }
+    BEGIN { print h(bytes) }'
+}
+
+process_targets() {
+    find . -type d -name target -print0 |
+    {
+        while IFS= read -r -d '' dir; do
+            dir_abs=$(realpath "$dir")
+            if is_excluded "$dir_abs"; then
+                continue
+            fi
+
+            size_kb=$(du -sk "$dir_abs" | awk '{ print $1 }')
+            size_bytes=$((size_kb * 1024))
+            size_human=$(human_size "$size_bytes")
+
+            echo "$dir_abs ($size_human)"
+
+            TOTAL_SIZE=$((TOTAL_SIZE + size_bytes))
+            TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+            if [ "$DRY_RUN" -eq 0 ]; then
+                rm -rf "$dir_abs"
+            fi
+        done
+
+        # финальный вывод только после завершения цикла
+        echo
+        echo "Total: $TOTAL_COUNT dirs"
+        echo "Freed: $(human_size $TOTAL_SIZE)"
+        [ "$DRY_RUN" -eq 1 ] && echo "(Dry run — nothing deleted)"
+    }
+}
+
+process_targets
