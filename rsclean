@@ -6,6 +6,13 @@ DRY_RUN=0
 EXCLUDES=""
 TOTAL_SIZE=0
 TOTAL_COUNT=0
+ROOT_DIR=$(pwd)
+
+# convert absolute path to path relative to $ROOT_DIR
+relpath() {
+    abs="$1"
+    echo "$abs" | sed "s|^$ROOT_DIR/||"
+}
 
 # parse args
 while [ "$#" -gt 0 ]; do
@@ -16,8 +23,10 @@ while [ "$#" -gt 0 ]; do
         --exclude)
             shift
             while [ "$1" ] && [ "${1#--}" = "$1" ]; do
+                abs_excl=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+                rel_excl=$(relpath "$abs_excl")
                 EXCLUDES="$EXCLUDES
-$(realpath "$1")"
+$rel_excl"
                 shift
             done
             continue
@@ -51,26 +60,27 @@ process_targets() {
     find . -type d -name target -print0 |
     {
         while IFS= read -r -d '' dir; do
-            dir_abs=$(realpath "$dir")
-            if is_excluded "$dir_abs"; then
+            abs_dir=$(cd "$dir" && pwd)
+            rel_dir=$(relpath "$abs_dir")
+
+            if is_excluded "$rel_dir"; then
                 continue
             fi
 
-            size_kb=$(du -sk "$dir_abs" | awk '{ print $1 }')
+            size_kb=$(du -sk "$rel_dir" | awk '{ print $1 }')
             size_bytes=$((size_kb * 1024))
             size_human=$(human_size "$size_bytes")
 
-            echo "$dir_abs ($size_human)"
+            echo "$rel_dir ($size_human)"
 
             TOTAL_SIZE=$((TOTAL_SIZE + size_bytes))
             TOTAL_COUNT=$((TOTAL_COUNT + 1))
 
             if [ "$DRY_RUN" -eq 0 ]; then
-                rm -rf "$dir_abs"
+                rm -rf "$rel_dir"
             fi
         done
 
-        # финальный вывод только после завершения цикла
         echo
         echo "Total: $TOTAL_COUNT dirs"
         echo "Freed: $(human_size $TOTAL_SIZE)"
