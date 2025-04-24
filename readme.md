@@ -7,7 +7,7 @@ Utility for reclaiming disk space by removing `target` directories in Rust proje
 Copy the script into your `$PATH`, for example:
 
 ```sh
-curl -o ~/.local/bin/rsclean https://raw.githubusercontent.com/dvshur/rsclean/main/rsclean
+curl -o ~/.local/bin/rsclean https://raw.githubusercontent.com/dvshur/rsclean/master/rsclean
 chmod +x ~/.local/bin/rsclean
 ```
 
